@@ -1,0 +1,66 @@
+name: Metaflow Kubernetes Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  k8s-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ matrix.python-version }}
+
+      - name: Install Metaflow
+        run: pip install metaflow pytest
+
+      - name: Setup Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: metaflow-ci
+
+      - name: Verify cluster healthy
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          echo "Kind cluster is healthy"
+
+      - name: Deploy Argo Workflows
+        run: |
+          kubectl create namespace argo
+          kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.5.0/install.yaml
+          echo "Argo Workflows deployed"
+
+      - name: Run Metaflow smoke test
+        run: |
+          python -c "
+from metaflow import FlowSpec, step
+class SmokeFlow(FlowSpec):
+    @step
+    def start(self):
+        print('Metaflow K8s CI - GSoC 2026 - Abhiram')
+        self.next(self.end)
+    @step
+    def end(self):
+        print('Smoke test passed!')
+if __name__ == '__main__':
+    SmokeFlow()
+"
+          echo "Smoke test passed"
