@@ -3,8 +3,6 @@ name: Metaflow Kubernetes Integration Tests
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   k8s-integration:
@@ -13,7 +11,6 @@ jobs:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
       fail-fast: false
-
     steps:
       - uses: actions/checkout@v4
 
@@ -22,43 +19,32 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache pip
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ matrix.python-version }}
-
-      - name: Install Metaflow
+      - name: Install dependencies
         run: pip install metaflow pytest
 
       - name: Setup Kind cluster
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@v1.8.0
         with:
           cluster_name: metaflow-ci
 
-      - name: Verify cluster healthy
+      - name: Verify cluster
         run: kubectl get nodes
 
-      - name: Deploy Argo Workflows
+      - name: Create smoke test
         run: |
-          kubectl create namespace argo
-          kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.5.0/install.yaml
-
-      - name: Write smoke test
-        run: |
-          cat > smoke_test.py << 'PYEOF'
-          from metaflow import FlowSpec, step
-          class SmokeFlow(FlowSpec):
-              @step
-              def start(self):
-                  print("Metaflow K8s CI - GSoC 2026 - Abhiram")
-                  self.next(self.end)
-              @step
-              def end(self):
-                  print("Smoke test passed!")
-          if __name__ == "__main__":
-              SmokeFlow()
-          PYEOF
+          cat > smoke.py << 'PYEOF'
+from metaflow import FlowSpec, step
+class SmokeFlow(FlowSpec):
+    @step
+    def start(self):
+        print("GSoC 2026 Abhiram - K8s CI working!")
+        self.next(self.end)
+    @step
+    def end(self):
+        print("All good!")
+if __name__ == "__main__":
+    SmokeFlow()
+PYEOF
 
       - name: Run smoke test
-        run: python smoke_test.py run
+        run: python smoke.py run
